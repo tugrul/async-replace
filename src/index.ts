@@ -20,7 +20,7 @@ export async function replace(str: string, regex: RegExp, callback: ReplaceCallb
         parts.push(callback(target, groups, match.index, match.input));
         last = match.index + match[0].length;
 
-        if (--size < 1) {
+        if (size > 0 && --size === 0) {
             size = limit
             chunks.push((await Promise.all(parts)).join(''));
             parts = [];
@@ -31,7 +31,7 @@ export async function replace(str: string, regex: RegExp, callback: ReplaceCallb
         }
     }
 
-    chunks.push((await Promise.all(parts)).join(''));
+    parts.length > 0 && chunks.push((await Promise.all(parts)).join(''));
 
     // check the remainder and push to array if any
     last < str.length && chunks.push(str.substring(last));
