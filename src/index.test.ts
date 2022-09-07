@@ -106,13 +106,14 @@ test('replace function to return index', async() => {
     expect(result).toBe('b1g3j');
 });
 
-test('replace function to return complete string', async() => {
+test('replace function limit feature', async() => {
 
-    const pattern = /a/g;
+    const text = 'zing zabz miki mabm rabm lolo oabo mofo rofo tabo moz mabo raks kabo';
+    const pattern = /ab/g;
 
-    const result = await replace('bagaj', pattern, async(match, groups, index, string) => {
-        return string;
-    });
+    const result = await replace(text, pattern, async(match) => {
+        return match;
+    }, 3);
 
-    expect(result).toBe('bbagajgbagajj');
+    expect(result).toBe(text);
 });

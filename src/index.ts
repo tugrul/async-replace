@@ -1,29 +1,40 @@
 
 export type ReplaceCallback = (match: string, groups: string[], index: number, input: string) => Promise<string>;
 
-export async function replace(str: string, regex: RegExp, callback: ReplaceCallback) {
+export async function replace(str: string, regex: RegExp, callback: ReplaceCallback, limit: number = 0) {
 
     let last = 0;
     let match = null;
-    const chunks = [];
+    let parts = [];
+    const chunks : string[] = [];
+
+    let size = limit;
 
     while ((match = regex.exec(str)) !== null) {
 
         // check the start fragment and push it to the array if it exists
-        match.index > last && chunks.push(str.substring(last, match.index));
+        match.index > last && parts.push(str.substring(last, match.index));
 
         const [target, ...groups] = match;
 
-        chunks.push(callback(target, groups, match.index, match.input));
+        parts.push(callback(target, groups, match.index, match.input));
         last = match.index + match[0].length;
+
+        if (--size < 1) {
+            size = limit
+            chunks.push((await Promise.all(parts)).join(''));
+            parts = [];
+        }
 
         if (!regex.global) {
             break;
         }
     }
 
+    chunks.push((await Promise.all(parts)).join(''));
+
     // check the remainder and push to array if any
     last < str.length && chunks.push(str.substring(last));
 
-    return (await Promise.all(chunks)).join('');
+    return chunks.join('');
 }

@@ -15,6 +15,8 @@ const {replace} = require('@tugrul/async-replace');
 const text = 'the [example.com] website is the best website but [example.org] is better one';
 const pattern = /\[([^\]]+)\]/g
 
+// concurrency limiting to avoid resource saturation
+const limit = 5;
 
 async function addStatusCode(text) {
 
@@ -23,7 +25,7 @@ async function addStatusCode(text) {
         const {status} = await fetch('https://' + domain);
 
         return '[' + domain + ' (' + status + ')]';
-    });
+    }, limit);
 
 }
 
