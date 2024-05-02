@@ -35,7 +35,7 @@ export async function replace(str: string, regex: RegExp, callback: ReplaceCallb
         const [target, ...groups] = match;
 
         parts.push(callback(target, groups, match.index, match.input));
-        last = match.index + match[0].length;
+        last = match.index + target.length;
 
         if (size > 0 && --size === 0) {
             size = limit
