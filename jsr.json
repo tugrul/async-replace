@@ -1,0 +1,5 @@
+{
+  "name": "@tugrul/async-replace",
+  "version": "1.0.3",
+  "exports": "./mod.ts"
+}

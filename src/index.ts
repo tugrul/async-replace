@@ -1,7 +1,7 @@
 
 export type ReplaceCallback = (match: string, groups: string[], index: number, input: string) => Promise<string>;
 
-export async function replace(str: string, regex: RegExp, callback: ReplaceCallback, limit: number = 0) {
+export async function replace(str: string, regex: RegExp, callback: ReplaceCallback, limit: number = 0): string {
 
     let last = 0;
     let match = null;
