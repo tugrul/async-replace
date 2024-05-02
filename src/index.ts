@@ -18,7 +18,7 @@ export type ReplaceCallback = (match: string, groups: string[], index: number, i
  * @param limit - Optional. The maximum number of replacements to make concurrently. Default is 0 (no limit).
  * @returns A Promise resolving to the modified string after replacements.
  */
-export async function replace(str: string, regex: RegExp, callback: ReplaceCallback, limit: number = 0): string {
+export async function replace(str: string, regex: RegExp, callback: ReplaceCallback, limit: number = 0): Promise<string> {
 
     let last = 0;
     let match = null;
