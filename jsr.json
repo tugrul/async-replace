@@ -1,5 +1,6 @@
 {
   "name": "@tugrul/async-replace",
-  "version": "1.0.3",
+  "description": "A lightweight TypeScript module for asynchronous string replacement with concurrency limiting.",
+  "version": "1.0.4",
   "exports": "./mod.ts"
 }
