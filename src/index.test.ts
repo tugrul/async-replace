@@ -3,6 +3,23 @@ import { replace } from '.';
 const echo = async (match: string) => match;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// One code point, two UTF-16 code units (a surrogate pair).
+const grin = '\u{1F600}';
+
+// Wraps each match in brackets. A regression in empty-match handling is a synchronous
+// infinite loop, which Jest's timeout cannot interrupt: the worker runs out of memory
+// instead of failing. A string has at most length + 1 match positions, so throwing
+// synchronously past that turns the hang into an ordinary failure.
+const bracket = (input: string) => {
+    let calls = 0;
+    return (match: string): Promise<string> => {
+        if (++calls > input.length + 1) {
+            throw new Error(`runaway scan: callback call ${calls} on ${JSON.stringify(input)}`);
+        }
+        return Promise.resolve(`[${match}]`);
+    };
+};
+
 describe('exact match', () => {
     const pattern = /(\w)o+(\w)/g;
     test.each([
@@ -68,6 +85,23 @@ describe('edge cases', () => {
 
     test('terminates on lookahead-only patterns', async () => {
         expect(await replace('a1b2', /(?=\d)/g, async () => '.')).toBe('a1b2'.replace(/(?=\d)/g, '.'));
+    });
+
+    // regression (#1): after an empty match the scan stepped one UTF-16 code unit. Under
+    // the u or v flag that can land inside a surrogate pair, where exec backs up to the
+    // lead surrogate and returns the same empty match forever. Expected values are what
+    // String#replace produces. The last row pins the other side: without a unicode flag
+    // the step stays one code unit, so the pair is split exactly as native splits it.
+    test.each([
+        ['a' + grin, '\\p{L}*', 'gu', `[a][]${grin}[]`],
+        [grin, '(?:)', 'gu', `[]${grin}[]`],
+        [grin, '(?:)', 'gv', `[]${grin}[]`],
+        [grin + grin, '(?:)', 'gu', `[]${grin}[]${grin}[]`],
+        ['aXb', '\\b', 'g', '[]aXb[]'],
+        [grin, '(?:)', 'g', '[]\ud83d[]\ude00[]'],
+    ])('steps over empty matches in %p with /%s/%s', async (input, source, flags, expected) => {
+        expect(await replace(input, new RegExp(source, flags), bracket(input))).toBe(expected);
+        expect(await replace(input, new RegExp(source, flags), bracket(input), 1)).toBe(expected);
     });
 
     test('replaces only the first match without the g flag', async () => {
@@ -192,9 +226,17 @@ describe('limit semantics', () => {
 // Differential check: for a callback that only depends on the match, this should
 // be indistinguishable from String#replace -- result and resulting lastIndex.
 describe('parity with String#replace', () => {
-    const inputs = ['', 'a', 'aab', 'abc', 'aaa', 'zing job came boom zang', 'a1b2c3', '  x  '];
-    const sources = ['a', 'a+', '\\d', '(\\w)o+(\\w)', 'x*', '(?=\\d)', '(a)|(b)', '\\b', '^', '$'];
-    const flagSets = ['', 'g', 'y', 'gy', 'i', 'gi'];
+    const inputs = [
+        '', 'a', 'aab', 'abc', 'aaa', 'zing job came boom zang', 'a1b2c3', '  x  ',
+        // astral characters, and surrogates that do not form a pair
+        grin, 'a' + grin, grin + 'b', grin + grin, '\ud83d', '\ude00', 'a\ude00\ud83db',
+    ];
+    const sources = [
+        'a', 'a+', '\\d', '(\\w)o+(\\w)', 'x*', '(?=\\d)', '(a)|(b)', '\\b', '^', '$',
+        '(?:)', '.', '.?', '\\p{L}*',
+    ];
+    // start 1 lands inside the surrogate pair of an input that begins with an astral character
+    const flagSets = ['', 'g', 'y', 'gy', 'i', 'gi', 'u', 'gu', 'yu', 'gyu', 'gv', 'yv'];
     const starts = [0, 1, 2];
     const stamp = (match: string) => `[${match}]`;
 
@@ -217,10 +259,16 @@ describe('parity with String#replace', () => {
             mine.lastIndex = start;
             native.lastIndex = start;
 
-            const expected = input.replace(native, stamp);
-            const actual = await replace(input, mine, async (match) => stamp(match));
-
             const label = `/${source}/${flags} on ${JSON.stringify(input)} @${start}`;
+            const expected = input.replace(native, stamp);
+            let actual: string;
+            try {
+                actual = await replace(input, mine, bracket(input));
+            } catch (error) {
+                mismatches.push(`${label}: ${(error as Error).message}`);
+                continue;
+            }
+
             if (actual !== expected) {
                 mismatches.push(`${label}: got ${JSON.stringify(actual)}, native ${JSON.stringify(expected)}`);
             }

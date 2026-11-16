@@ -15,12 +15,27 @@ export type ReplaceCallback = (
 ) => Promise<string>;
 
 /**
+ * Where to resume scanning after an empty match at `index`: one code unit on, or one
+ * whole code point in unicode mode. Stepping a single code unit there can land between
+ * the halves of a surrogate pair, where exec backs up to the lead surrogate and returns
+ * the same empty match again. Mirrors AdvanceStringIndex in ECMA-262.
+ */
+function advanceIndex(str: string, index: number, unicode: boolean): number {
+    if (!unicode) {
+        return index + 1;
+    }
+    const codePoint = str.codePointAt(index);
+    return index + (codePoint !== undefined && codePoint > 0xffff ? 2 : 1);
+}
+
+/**
  * Asynchronously replaces substrings in a string that match a specified regular expression
  * with the results of a specified callback function.
  *
- * The supplied `regex` is never mutated: matching runs against an internal clone, so the
- * caller's `lastIndex` is left untouched and the same RegExp object can be reused or
- * shared across concurrent calls.
+ * Matching runs against an internal clone of `regex`, so one RegExp object can be shared
+ * across concurrent calls. When the call succeeds, the caller's `lastIndex` is left where
+ * `String#replace` would leave it: 0 for a global regex, just past the match for a sticky
+ * non-global one, and untouched otherwise.
  *
  * @param str - The input string to perform replacements on.
  * @param regex - The regular expression pattern to match substrings against.
@@ -48,6 +63,8 @@ export async function replace(
     if (re.sticky && !re.global) {
         re.lastIndex = regex.lastIndex;
     }
+    // `unicode` is false under the v flag, so read the flags rather than the property.
+    const unicode = re.unicode || re.flags.includes('v');
     const chunks: string[] = [];
     let parts: (string | Promise<string>)[] = [];
     let match: RegExpExecArray | null = null;
@@ -77,7 +94,7 @@ export async function replace(
         // same match forever. Step over it -- but only when the loop continues, or the
         // bump would leak into the cursor handed back to a sticky caller.
         if (target.length === 0) {
-            re.lastIndex++;
+            re.lastIndex = advanceIndex(str, re.lastIndex, unicode);
         }
     }
 
